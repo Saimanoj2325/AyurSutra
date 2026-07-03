@@ -1,0 +1,23 @@
+# --- General ---
+.DS_Store
+*.log
+.env
+.env.*
+.vscode/
+.idea/
+
+# --- Frontend ---
+frontend/node_modules
+frontend/dist
+frontend/build
+frontend/coverage
+frontend/.env.local
+frontend/.replit
+
+# --- Backend ---
+backend/venv
+backend/__pycache__
+backend/.env
+backend/firebase-credentials.json
+backend/firebase.json
+.local/
