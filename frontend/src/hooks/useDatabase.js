@@ -9,6 +9,7 @@ import {
   taskService,
   documentService,
   messageService,
+  practitionerService,
   subscribeToUserNotifications,
   subscribeToUserSessions
 } from '../services/database';
@@ -303,18 +304,22 @@ export const useProgress = (userId) => {
 };
 
 // Hook for patients list (for practitioners)
-export const usePatients = () => {
+export const usePatients = (practitionerUid) => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   const fetchPatients = useCallback(async () => {
+    if (!practitionerUid) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    const result = await userService.getAllPatients();
+    const result = await practitionerService.getAssignedPatients(practitionerUid);
     if (result.success) { setPatients(result.data); setError(null); }
     else { setError(result.error); }
     setLoading(false);
-  }, []);
+  }, [practitionerUid]);
 
   useEffect(() => { fetchPatients(); }, [fetchPatients]);
 

@@ -74,11 +74,15 @@ export function Login() {
         setMessage('Account created successfully! You are now logged in.');
       } else {
         // Login user
-        await login(formData.email, formData.password);
+        await login(formData.email, formData.password, userType);
       }
     } catch (error) {
       console.error('Authentication error:', error);
-      setError(getErrorMessage(error.code));
+      if (error.code === 'auth/role-mismatch') {
+        setError(error.message);
+      } else {
+        setError(getErrorMessage(error.code));
+      }
     } finally {
       setLoading(false);
     }
@@ -197,7 +201,11 @@ export function Login() {
                 <Button
                   type="button"
                   variant={userType === 'patient' ? 'default' : 'ghost'}
-                  onClick={() => setUserType('patient')}
+                  onClick={() => {
+                    setUserType('patient');
+                    setError('');
+                    setMessage('');
+                  }}
                   className={`flex-1 ${userType === 'patient' ? 'bg-emerald-600 text-white' : 'text-emerald-700'}`}
                 >
                   <User className="w-4 h-4 mr-2" />
@@ -206,7 +214,11 @@ export function Login() {
                 <Button
                   type="button"
                   variant={userType === 'practitioner' ? 'default' : 'ghost'}
-                  onClick={() => setUserType('practitioner')}
+                  onClick={() => {
+                    setUserType('practitioner');
+                    setError('');
+                    setMessage('');
+                  }}
                   className={`flex-1 ${userType === 'practitioner' ? 'bg-emerald-600 text-white' : 'text-emerald-700'}`}
                 >
                   <Heart className="w-4 h-4 mr-2" />
@@ -243,18 +255,20 @@ export function Login() {
               )}
 
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Basic Information */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Full Name</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => handleInputChange('name', e.target.value)}
-                      placeholder={userType === 'patient' ? 'Priya Sharma' : 'Dr. Kamal Raj'}
-                      required
-                    />
-                  </div>
+                {/* Email field - always visible */}
+                <div className={`grid grid-cols-1 ${isRegistering ? 'md:grid-cols-2' : ''} gap-4`}>
+                  {isRegistering && (
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Full Name</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => handleInputChange('name', e.target.value)}
+                        placeholder={userType === 'patient' ? 'Priya Sharma' : 'Dr. Kamal Raj'}
+                        required
+                      />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -401,7 +415,12 @@ export function Login() {
                   <Button
                     type="button"
                     variant="link"
-                    onClick={() => setIsRegistering(!isRegistering)}
+                    onClick={() => {
+                      setIsRegistering(!isRegistering);
+                      setError('');
+                      setMessage('');
+                      setFormData(prev => ({ ...prev, password: '' }));
+                    }}
                     className="text-emerald-600 hover:text-emerald-700"
                   >
                     {isRegistering 

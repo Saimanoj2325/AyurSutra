@@ -27,94 +27,49 @@ import {
   Filter
 } from 'lucide-react';
 
+import { useNotes, usePatients } from '../hooks/useDatabase';
+import { useAuth } from '../contexts/AuthContext';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
+import { toast } from 'sonner';
+
 /**
  * @param {{ onPageChange: (page: string) => void }} props
  */
 export function NotesHistory({ onPageChange }) {
-  // Mock data moved inside the component to keep the file self-contained
-  const patientNotes = [
-    {
-      id: 1,
-      patientId: 1,
-      patientName: 'Priya Sharma',
-      patientAvatar: '/placeholder-avatar.jpg',
-      date: new Date(2024, 11, 13),
-      time: '14:30',
-      sessionType: 'Abhyanga',
-      noteType: 'Session Note',
-      title: 'Post-session observation',
-      content:
-        'Patient showed significant improvement in stress levels. Reported better sleep quality and reduced anxiety. Skin texture has improved noticeably. Recommend continuing current protocol for next 2 weeks.',
-      practitioner: 'Dr. Kamal Raj',
-      attachments: [
-        { id: 1, name: 'progress_photos.jpg', type: 'image', size: '2.4 MB' },
-        { id: 2, name: 'treatment_plan.pdf', type: 'pdf', size: '1.1 MB' }
-      ],
-      tags: ['improvement', 'stress-reduction', 'skin-health'],
-      isEditable: true
-    },
-    {
-      id: 2,
-      patientId: 1,
-      patientName: 'Priya Sharma',
-      patientAvatar: '/placeholder-avatar.jpg',
-      date: new Date(2024, 11, 10),
-      time: '10:00',
-      sessionType: 'Consultation',
-      noteType: 'Medical Note',
-      title: 'Initial consultation findings',
-      content:
-        'Patient presents with chronic stress, mild digestive issues, and sleep disturbances. Pulse examination indicates Vata-Pitta imbalance. Recommended Abhyanga therapy 3x weekly with specific herbal oils.',
-      practitioner: 'Dr. Kamal Raj',
-      attachments: [{ id: 3, name: 'pulse_assessment.pdf', type: 'pdf', size: '800 KB' }],
-      tags: ['initial-assessment', 'vata-pitta', 'consultation'],
-      isEditable: true
-    },
-    {
-      id: 3,
-      patientId: 2,
-      patientName: 'Raj Patel',
-      patientAvatar: '/placeholder-avatar.jpg',
-      date: new Date(2024, 11, 8),
-      time: '16:15',
-      sessionType: 'Shirodhara',
-      noteType: 'Session Note',
-      title: 'Shirodhara session #4',
-      content:
-        'Patient reported mild discomfort during oil flow. Adjusted oil temperature and flow rate. BP readings stable during session (138/85). Patient felt more relaxed post-session.',
-      practitioner: 'Dr. Kamal Raj',
-      attachments: [{ id: 4, name: 'bp_readings.csv', type: 'csv', size: '45 KB' }],
-      tags: ['blood-pressure', 'shirodhara', 'adjustment'],
-      isEditable: true
-    },
-    {
-      id: 4,
-      patientId: 3,
-      patientName: 'Meera Singh',
-      patientAvatar: '/placeholder-avatar.jpg',
-      date: new Date(2024, 11, 12),
-      time: '11:45',
-      sessionType: 'Panchakarma',
-      noteType: 'Progress Note',
-      title: 'Panchakarma Day 12 - Excellent progress',
-      content:
-        'Outstanding response to detox protocol. Energy levels normalized, digestive fire (Agni) significantly improved. Patient reports feeling "reborn". Recommend tapering down intensity gradually.',
-      practitioner: 'Dr. Kamal Raj',
-      attachments: [
-        { id: 5, name: 'detox_progress_chart.pdf', type: 'pdf', size: '1.8 MB' },
-        { id: 6, name: 'dietary_recommendations.docx', type: 'doc', size: '245 KB' }
-      ],
-      tags: ['excellent-progress', 'detox', 'energy-improvement'],
-      isEditable: true
-    }
-  ];
+  const { currentUser, userProfile } = useAuth();
+  const { patients: livePatients = [], loading: patientsLoading } = usePatients(currentUser?.uid);
+  const { notes: liveNotes = [], createNote, updateNote, deleteNote, loading: notesLoading } = useNotes(null, currentUser?.uid);
 
-  const patients = [
-    { id: 1, name: 'Priya Sharma', avatar: '/placeholder-avatar.jpg' },
-    { id: 2, name: 'Raj Patel', avatar: '/placeholder-avatar.jpg' },
-    { id: 3, name: 'Meera Singh', avatar: '/placeholder-avatar.jpg' },
-    { id: 4, name: 'Amit Kumar', avatar: '/placeholder-avatar.jpg' }
-  ];
+  const editTitleRef = React.useRef(null);
+  const editContentRef = React.useRef(null);
+
+  const patientNotes = React.useMemo(() => {
+    return (liveNotes || []).map(n => ({
+      id: n.id,
+      patientId: n.patientId || '',
+      patientName: n.patientName || 'Patient',
+      patientAvatar: n.patientAvatar || '/placeholder-avatar.jpg',
+      date: n.date ? (n.date.seconds ? new Date(n.date.seconds * 1000) : new Date(n.date)) : new Date(),
+      time: n.time || '12:00',
+      sessionType: n.sessionType || 'Session',
+      noteType: n.noteType || 'Session Note',
+      title: n.title || 'Note',
+      content: n.content || '',
+      practitioner: n.practitioner || 'Dr. Kamal Raj',
+      attachments: n.attachments || [],
+      tags: n.tags || [],
+      isEditable: n.isEditable !== undefined ? n.isEditable : true
+    }));
+  }, [liveNotes]);
+
+  const patients = React.useMemo(() => {
+    return (livePatients || []).map(p => ({
+      id: p.uid || p.id,
+      name: p.name || 'Patient',
+      avatar: '/placeholder-avatar.jpg'
+    }));
+  }, [livePatients]);
 
   const [selectedPatient, setSelectedPatient] = React.useState('all');
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -150,26 +105,77 @@ export function NotesHistory({ onPageChange }) {
     return acc;
   }, {});
 
-  const handleSaveNote = () => {
-    console.log('Saving note:', newNote, selectedFiles);
-    setIsAddingNote(false);
-    setNewNote({
-      patientId: '',
-      sessionType: '',
-      noteType: 'Session Note',
-      title: '',
-      content: '',
-      tags: ''
-    });
-    setSelectedFiles([]);
+  const handleSaveNote = async () => {
+    if (!currentUser?.uid) return;
+    const selectedPatientObj = patients.find(p => p.id === newNote.patientId);
+    
+    let uploadedAttachments = [];
+    if (selectedFiles.length > 0) {
+      const loadingToast = toast.loading(`Uploading ${selectedFiles.length} file(s)...`);
+      try {
+        uploadedAttachments = await Promise.all(
+          selectedFiles.map(async (file, index) => {
+            const fileRef = ref(storage, `practitioners/${currentUser.uid}/notes_attachments/${Date.now()}_${file.name}`);
+            const uploadResult = await uploadBytes(fileRef, file);
+            const downloadUrl = await getDownloadURL(uploadResult.ref);
+            return {
+              id: index + 1,
+              name: file.name,
+              url: downloadUrl,
+              type: file.type.includes('pdf') ? 'pdf' : file.type.includes('image') ? 'image' : 'file',
+              size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+            };
+          })
+        );
+        toast.dismiss(loadingToast);
+      } catch (err) {
+        console.error('Attachment upload failed:', err);
+        toast.dismiss(loadingToast);
+        toast.error('Failed to upload attachments: ' + err.message);
+        return;
+      }
+    }
+    
+    const noteData = {
+      patientId: newNote.patientId,
+      patientName: selectedPatientObj ? selectedPatientObj.name : 'Patient',
+      sessionType: newNote.sessionType || 'Session',
+      noteType: newNote.noteType || 'Session Note',
+      title: newNote.title,
+      content: newNote.content,
+      tags: newNote.tags.split(',').map(t => t.trim()).filter(Boolean),
+      practitioner: userProfile?.name || 'Practitioner',
+      practitionerId: currentUser?.uid,
+      attachments: uploadedAttachments
+    };
+    
+    try {
+      await createNote(noteData);
+      toast.success('Clinical note saved successfully');
+      setIsAddingNote(false);
+      setNewNote({
+        patientId: '',
+        sessionType: '',
+        noteType: 'Session Note',
+        title: '',
+        content: '',
+        tags: ''
+      });
+      setSelectedFiles([]);
+    } catch (dbErr) {
+      console.error('Note save failed:', dbErr);
+      toast.error('Failed to save note: ' + dbErr.message);
+    }
   };
 
   const handleEditNote = (noteId) => {
     setEditingNote(noteId);
   };
 
-  const handleSaveEdit = (noteId) => {
-    console.log('Saving edit for note:', noteId);
+  const handleSaveEdit = async (noteId) => {
+    const title = editTitleRef.current?.value;
+    const content = editContentRef.current?.value;
+    await updateNote(noteId, { title, content });
     setEditingNote(null);
   };
 
@@ -372,8 +378,8 @@ export function NotesHistory({ onPageChange }) {
                             <div className="mb-3">
                               {editingNote === note.id ? (
                                 <div className="space-y-3">
-                                  <Input defaultValue={note.title} placeholder="Note title..." className="font-medium" />
-                                  <Textarea defaultValue={note.content} placeholder="Note content..." rows={4} />
+                                  <Input ref={editTitleRef} defaultValue={note.title} placeholder="Note title..." className="font-medium" />
+                                  <Textarea ref={editContentRef} defaultValue={note.content} placeholder="Note content..." rows={4} />
                                 </div>
                               ) : (
                                 <>
@@ -409,10 +415,30 @@ export function NotesHistory({ onPageChange }) {
                                         <p className="text-xs text-gray-500">{attachment.size}</p>
                                       </div>
                                       <div className="flex items-center space-x-1">
-                                        <Button size="sm" variant="outline" className="p-1">
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          className="p-1"
+                                          onClick={() => attachment.url && window.open(attachment.url, '_blank')}
+                                        >
                                           <Eye className="w-3 h-3" />
                                         </Button>
-                                        <Button size="sm" variant="outline" className="p-1">
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline" 
+                                          className="p-1"
+                                          onClick={() => {
+                                            if (attachment.url) {
+                                              const link = window.document.createElement('a');
+                                              link.href = attachment.url;
+                                              link.target = '_blank';
+                                              link.download = attachment.name || 'download';
+                                              window.document.body.appendChild(link);
+                                              link.click();
+                                              window.document.body.removeChild(link);
+                                            }
+                                          }}
+                                        >
                                           <Download className="w-3 h-3" />
                                         </Button>
                                       </div>

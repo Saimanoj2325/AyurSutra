@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from './ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { useAuth } from '../contexts/AuthContext';
+import { userService } from '../services/database';
 import {
   User,
   Lock,
@@ -19,27 +21,51 @@ import {
   Mail,
   Phone,
   Calendar,
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react';
 
 /**
  * @param {{ onPageChange: (page: string) => void, onLogout: () => void, userType: 'patient' | 'practitioner' }} props
  */
 export function Settings({ onPageChange, onLogout, userType }) {
+  const { currentUser, userProfile } = useAuth();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = React.useState(false);
+  const [saveStatus, setSaveStatus] = React.useState('');
+
+  // Initialize profile data from real user profile
   const [profileData, setProfileData] = React.useState({
-    name: userType === 'patient' ? 'Priya Sharma' : 'Dr. Kamal Raj',
-    email: userType === 'patient' ? 'priya@demo.com' : 'kamal@demo.com',
-    phone: '+91 98765 43210',
-    age: userType === 'patient' ? '32' : '45',
-    gender: 'female',
-    dosha: 'vata-pitta',
-    address: '123 Wellness Street, Mumbai, Maharashtra',
-    emergencyContact: 'Raj Sharma (+91 98765 43211)',
-    specialization: userType === 'practitioner' ? 'Panchakarma Specialist' : '',
-    experience: userType === 'practitioner' ? '15' : '',
-    license: userType === 'practitioner' ? 'AYU-MH-2010-12345' : ''
+    name: '',
+    email: '',
+    phone: '',
+    age: '',
+    gender: '',
+    dosha: '',
+    address: '',
+    emergencyContact: '',
+    specialization: '',
+    experience: '',
+    license: ''
   });
+
+  // Load real profile data when userProfile is available
+  React.useEffect(() => {
+    if (userProfile) {
+      setProfileData({
+        name: userProfile.name || '',
+        email: userProfile.email || currentUser?.email || '',
+        phone: userProfile.phone || '',
+        age: userProfile.age || '',
+        gender: userProfile.gender || '',
+        dosha: userProfile.dosha || '',
+        address: userProfile.address || '',
+        emergencyContact: userProfile.emergencyContact || '',
+        specialization: userProfile.specialization || '',
+        experience: userProfile.experience || '',
+        license: userProfile.license || ''
+      });
+    }
+  }, [userProfile, currentUser]);
 
   const [passwordData, setPasswordData] = React.useState({
     currentPassword: '',
@@ -78,8 +104,25 @@ export function Settings({ onPageChange, onLogout, userType }) {
     }));
   };
 
-  const handleSaveProfile = () => {
-    console.log('Saving profile:', profileData);
+  const handleSaveProfile = async () => {
+    if (!currentUser?.uid) return;
+    setSaveStatus('saving');
+    try {
+      const updates = { ...profileData };
+      delete updates.email; // Don't update email via profile update
+      const result = await userService.updateUser(currentUser.uid, updates);
+      if (result.success) {
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus(''), 3000);
+      } else {
+        setSaveStatus('error');
+        setTimeout(() => setSaveStatus(''), 3000);
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus(''), 3000);
+    }
   };
 
   const handleChangePassword = () => {

@@ -7,9 +7,10 @@ import re
 import math
 import datetime
 from collections import Counter
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from firebase_config import verify_firebase_token
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -50,7 +51,7 @@ class ChatResponse(BaseModel):
     plain_text: Optional[str] = None
 
 # --- Comprehensive Ayurvedic Knowledge Base ---
-AYURVEDIC_KNOWLEDGE = [
+AYURVEDIC_KNOWLEDGE: List[Dict[str, Any]] = [
     # === DOSHAS ===
     {
         "id": "vata-dosha",
@@ -328,7 +329,7 @@ def generate_ai_response(
     relevant_knowledge: List[Dict], 
     conversation_history: Optional[List[Dict[str, str]]] = None,
     patient_context: Optional[PatientContext] = None
-) -> Dict[str, str]:
+) -> Dict[str, Optional[str]]:
     if not client:
         return {
             "plain_text": "I'm sorry, the AI service is currently unavailable. Please try again later.",
@@ -370,7 +371,7 @@ Important guidelines:
             system_prompt += f"\n\nPatient Context:\n" + "\n".join(context_parts)
             system_prompt += "\n\nPersonalize your responses based on this patient's context when relevant."
 
-    messages = [{"role": "system", "content": system_prompt}]
+    messages: Any = [{"role": "system", "content": system_prompt}]
     
     # Add conversation history (sliding window of last 10 messages)
     if conversation_history:
@@ -401,11 +402,12 @@ Provide a helpful, structured response. If the context doesn't fully cover the q
     try:
         resp = client.chat.completions.create(
             model="mistral-small-latest",
-            messages=messages,
+            messages=messages,  # type: ignore
             temperature=0.5,
             max_tokens=800
         )
-        text = resp.choices[0].message.content.strip()
+        content = resp.choices[0].message.content
+        text = content.strip() if content else ""
         return {"plain_text": text, "formatted_html": None}
     except Exception as e:
         print(f"[ERROR] AI generation failed: {e}")
@@ -415,7 +417,7 @@ Provide a helpful, structured response. If the context doesn't fully cover the q
 
 # --- API Routes ---
 @router.post("/chat", response_model=ChatResponse)
-async def chat_with_ayurbot(request: ChatRequest):
+async def chat_with_ayurbot(request: ChatRequest, token: dict = Depends(verify_firebase_token)):
     if not client:
         raise HTTPException(status_code=503, detail="AI service unavailable. API key not configured.")
     
@@ -434,12 +436,13 @@ async def chat_with_ayurbot(request: ChatRequest):
     sources = list({entry["metadata"]["source"] for entry in relevant})
     source_categories = list({entry["metadata"]["category"] for entry in relevant})
     
+    plain_text_response = ai_resp.get("plain_text") or ""
     return ChatResponse(
-        response=ai_resp["plain_text"],
+        response=plain_text_response,
         sources=sources,
         source_categories=source_categories,
         formatted_html=ai_resp.get("formatted_html"),
-        plain_text=ai_resp["plain_text"]
+        plain_text=plain_text_response
     )
 
 
@@ -454,7 +457,7 @@ async def chatbot_health():
 
 
 @router.get("/knowledge")
-async def list_knowledge_topics():
+async def list_knowledge_topics(token: dict = Depends(verify_firebase_token)):
     """List available knowledge base topics and categories"""
     categories = {}
     for entry in AYURVEDIC_KNOWLEDGE:

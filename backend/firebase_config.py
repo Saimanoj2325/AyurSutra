@@ -1,5 +1,5 @@
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, auth
 import os
 from dotenv import load_dotenv
 
@@ -58,3 +58,26 @@ try:
 except Exception as e:
     print(f"[ERROR] Firebase initialization failed: {e}")
     raise e
+
+# --- FastAPI Security Dependency ---
+from fastapi import Header, HTTPException, status
+
+def verify_firebase_token(authorization: str = Header(None)):
+    """
+    Dependency to verify Firebase ID tokens passed in the Authorization header.
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header. Expected format: Bearer <token>"
+        )
+    
+    token = authorization.split(" ")[1]
+    try:
+        decoded_token = auth.verify_id_token(token)
+        return decoded_token
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid authentication token: {str(e)}"
+        )

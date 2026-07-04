@@ -7,6 +7,11 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { useAuth } from '../contexts/AuthContext';
+import { useDocuments } from '../hooks/useDatabase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase';
+import { toast } from 'sonner';
 import {
   Upload,
   FileText,
@@ -24,6 +29,8 @@ import {
  * @param {{ onPageChange: (page: string) => void }} props
  */
 export function Documents({ onPageChange }) {
+  const { currentUser, userProfile } = useAuth();
+  const { documents: liveDocuments, createDocument, deleteDocument, loading: docsLoading } = useDocuments(currentUser?.uid);
   const [isUploadOpen, setIsUploadOpen] = React.useState(false);
   const [uploadForm, setUploadForm] = React.useState({
     title: '',
@@ -32,63 +39,8 @@ export function Documents({ onPageChange }) {
     file: null
   });
 
-  const documents = [
-    {
-      id: 1,
-      title: 'Blood Test Report',
-      description: 'Comprehensive blood work including vitamin levels and thyroid function',
-      category: 'Lab Report',
-      uploadDate: '2025-09-15',
-      uploadedBy: 'Priya Sharma',
-      fileSize: '2.3 MB',
-      fileType: 'PDF',
-      status: 'reviewed'
-    },
-    {
-      id: 2,
-      title: 'Ayurvedic Prescription',
-      description: 'Herbal medicines and dosage instructions from initial consultation',
-      category: 'Prescription',
-      uploadDate: '2025-09-17',
-      uploadedBy: 'Dr. Kamal Raj',
-      fileSize: '1.1 MB',
-      fileType: 'PDF',
-      status: 'active'
-    },
-    {
-      id: 3,
-      title: 'X-Ray Spine',
-      description: 'Spinal alignment check for posture-related issues',
-      category: 'Medical Image',
-      uploadDate: '2025-09-10',
-      uploadedBy: 'Priya Sharma',
-      fileSize: '5.7 MB',
-      fileType: 'JPEG',
-      status: 'reviewed'
-    },
-    {
-      id: 4,
-      title: 'Treatment Plan',
-      description: '14-day Panchakarma treatment schedule and guidelines',
-      category: 'Treatment Plan',
-      uploadDate: '2025-09-17',
-      uploadedBy: 'Dr. Kamal Raj',
-      fileSize: '890 KB',
-      fileType: 'PDF',
-      status: 'active'
-    },
-    {
-      id: 5,
-      title: 'Insurance Coverage',
-      description: 'Insurance pre-authorization for Panchakarma treatment',
-      category: 'Insurance',
-      uploadDate: '2025-09-12',
-      uploadedBy: 'Priya Sharma',
-      fileSize: '1.5 MB',
-      fileType: 'PDF',
-      status: 'approved'
-    }
-  ];
+  // Use live documents from Firestore, fallback to empty array
+  const documents = liveDocuments || [];
 
   const documentCategories = [
     'Lab Report',
@@ -108,23 +60,85 @@ export function Documents({ onPageChange }) {
     }
   };
 
-  const handleUploadSubmit = (e) => {
+  const handleUploadSubmit = async (e) => {
     e.preventDefault();
-    console.log('Uploading document:', uploadForm);
-    setIsUploadOpen(false);
-    setUploadForm({ title: '', description: '', category: '', file: null });
+    if (!currentUser?.uid || !uploadForm.file) {
+      toast.error('Please select a file to upload');
+      return;
+    }
+    
+    const loadingToast = toast.loading('Uploading file to secure storage...');
+    let downloadUrl = '';
+    
+    try {
+      // Create reference in Firebase Storage
+      const fileRef = ref(storage, `users/${currentUser.uid}/documents/${Date.now()}_${uploadForm.file.name}`);
+      const uploadResult = await uploadBytes(fileRef, uploadForm.file);
+      downloadUrl = await getDownloadURL(uploadResult.ref);
+    } catch (storageErr) {
+      console.error('Storage upload failed:', storageErr);
+      toast.dismiss(loadingToast);
+      toast.error('File upload failed: ' + storageErr.message);
+      return;
+    }
+    
+    const docData = {
+      title: uploadForm.title,
+      description: uploadForm.description,
+      category: uploadForm.category,
+      fileType: uploadForm.file?.type?.includes('pdf') ? 'PDF' : uploadForm.file?.name?.split('.').pop()?.toUpperCase() || 'File',
+      fileSize: uploadForm.file ? `${(uploadForm.file.size / (1024 * 1024)).toFixed(1)} MB` : '0 KB',
+      fileName: uploadForm.file?.name || 'Unknown',
+      fileUrl: downloadUrl,
+      uploadedBy: userProfile?.name || 'User',
+      uploadDate: new Date().toISOString().split('T')[0],
+      status: 'pending'
+    };
+    
+    try {
+      await createDocument(docData);
+      toast.dismiss(loadingToast);
+      toast.success('Document uploaded and saved successfully');
+      setIsUploadOpen(false);
+      setUploadForm({ title: '', description: '', category: '', file: null });
+    } catch (dbErr) {
+      console.error('Firestore save failed:', dbErr);
+      toast.dismiss(loadingToast);
+      toast.error('Failed to register document metadata: ' + dbErr.message);
+    }
+  };
+
+  const handleDeleteDocument = async (docId) => {
+    if (window.confirm('Are you sure you want to delete this document?')) {
+      await deleteDocument(docId);
+      toast.success('Document deleted successfully');
+    }
   };
 
   const handleView = (document) => {
-    console.log('Viewing document:', document.id);
+    if (document.fileUrl) {
+      window.open(document.fileUrl, '_blank');
+    } else {
+      toast.error('No viewing link available for this document.');
+    }
   };
 
   const handleDownload = (document) => {
-    console.log('Downloading document:', document.id);
+    if (document.fileUrl) {
+      const link = window.document.createElement('a');
+      link.href = document.fileUrl;
+      link.target = '_blank';
+      link.download = document.fileName || 'download';
+      window.document.body.appendChild(link);
+      link.click();
+      window.document.body.removeChild(link);
+    } else {
+      toast.error('No download link available for this document.');
+    }
   };
 
   const handleDelete = (document) => {
-    console.log('Deleting document:', document.id);
+    handleDeleteDocument(document.id);
   };
 
   const getStatusColor = (status) => {

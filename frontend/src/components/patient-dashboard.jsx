@@ -184,7 +184,7 @@ export function PatientDashboard({ onPageChange }) {
                             <span>{formatTime(session.time)}</span>
                           </div>
                         </div>
-                        <p className="text-sm text-emerald-700 mt-2">with {session.practitioner}</p>
+                        <p className="text-sm text-emerald-700 mt-2">with {session.practitionerName || session.practitioner || 'Practitioner'}</p>
                       </div>
                       <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
                         {session.status}
@@ -204,10 +204,19 @@ export function PatientDashboard({ onPageChange }) {
                     </div>
                     
                     <div className="flex space-x-3 mt-4">
-                      <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700">
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          localStorage.setItem('auto_start_call', 'true');
+                          localStorage.setItem('active_call_partner_id', session.practitionerId || 'practitioner_001');
+                          localStorage.setItem('active_call_partner_name', session.practitionerName || session.practitioner || 'Dr. Kamal Raj');
+                          onPageChange('communication');
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold transition-all shadow-sm hover:shadow-md"
+                      >
                         Join Session
                       </Button>
-                      <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-600">
+                      <Button variant="outline" size="sm" className="border-emerald-200 text-emerald-600 hover:bg-emerald-50" onClick={() => onPageChange('sessions')}>
                         Reschedule
                       </Button>
                     </div>

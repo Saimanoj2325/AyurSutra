@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Checkbox } from './ui/checkbox';
 import { Calendar } from './ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { useAuth } from '../contexts/AuthContext';
 import {
   ArrowLeft,
   Plus,
@@ -25,100 +26,29 @@ import {
   Search
 } from 'lucide-react';
 
+import { useTasks } from '../hooks/useDatabase';
+
 /**
  * @param {{ onPageChange: (page: string) => void }} props
  */
 export function TaskReminders({ onPageChange }) {
-  const tasks = [
-    {
-      id: 1,
-      title: 'Review Patient X report',
-      description:
-        'Review comprehensive health assessment report for Priya Sharma and prepare treatment adjustments',
-      priority: 'high',
-      dueDate: new Date(2024, 11, 15),
-      dueTime: '14:00',
-      category: 'patient-review',
-      completed: false,
-      createdAt: new Date(2024, 11, 13),
-      patientId: 1,
-      patientName: 'Priya Sharma'
-    },
-    {
-      id: 2,
-      title: 'Prepare diet chart for Meera Singh',
-      description: 'Create personalized Ayurvedic diet plan focusing on Vata dosha balancing',
-      priority: 'medium',
-      dueDate: new Date(2024, 11, 14),
-      dueTime: '16:00',
-      category: 'treatment-plan',
-      completed: true,
-      completedAt: new Date(2024, 11, 13, 15, 30),
-      createdAt: new Date(2024, 11, 12),
-      patientId: 3,
-      patientName: 'Meera Singh'
-    },
-    {
-      id: 3,
-      title: 'Follow up with Raj Patel',
-      description:
-        'Check on side effects reported during last Shirodhara session and adjust treatment protocol',
-      priority: 'urgent',
-      dueDate: new Date(2024, 11, 15),
-      dueTime: '10:00',
-      category: 'follow-up',
-      completed: false,
-      createdAt: new Date(2024, 11, 13),
-      patientId: 2,
-      patientName: 'Raj Patel'
-    },
-    {
-      id: 4,
-      title: 'Update treatment protocols',
-      description: 'Review and update standard operating procedures for Panchakarma treatments',
-      priority: 'low',
-      dueDate: new Date(2024, 11, 16),
-      dueTime: '11:00',
-      category: 'admin',
-      completed: false,
-      createdAt: new Date(2024, 11, 13)
-    },
-    {
-      id: 5,
-      title: 'Prepare monthly report',
-      description: 'Compile patient progress reports and treatment outcomes for December',
-      priority: 'medium',
-      dueDate: new Date(2024, 11, 30),
-      dueTime: '17:00',
-      category: 'admin',
-      completed: false,
-      createdAt: new Date(2024, 11, 13)
-    },
-    {
-      id: 6,
-      title: 'Order herbal supplies',
-      description: 'Restock essential oils and herbs for upcoming treatments',
-      priority: 'medium',
-      dueDate: new Date(2024, 11, 18),
-      dueTime: '12:00',
-      category: 'inventory',
-      completed: false,
-      createdAt: new Date(2024, 11, 13)
-    },
-    {
-      id: 7,
-      title: 'Schedule team meeting',
-      description:
-        'Organize monthly team meeting to discuss treatment improvements and patient feedback',
-      priority: 'low',
-      dueDate: new Date(2024, 11, 20),
-      dueTime: '15:00',
-      category: 'admin',
-      completed: true,
-      completedAt: new Date(2024, 11, 13, 9, 0),
-      createdAt: new Date(2024, 11, 12)
-    }
-  ];
+  const { currentUser } = useAuth();
+  const { tasks: liveTasks = [], createTask, deleteTask, toggleTask, loading: tasksLoading } = useTasks(currentUser?.uid);
+
+  const tasks = React.useMemo(() => {
+    return (liveTasks || []).map(t => ({
+      id: t.id,
+      title: t.title || t.task || 'Task',
+      description: t.description || '',
+      priority: t.priority || 'medium',
+      dueDate: t.dueDate ? (t.dueDate.seconds ? new Date(t.dueDate.seconds * 1000) : new Date(t.dueDate)) : new Date(),
+      dueTime: t.dueTime || '09:00',
+      category: t.category || 'patient-review',
+      completed: t.completed || false,
+      patientId: t.patientId || null,
+      patientName: t.patientName || null
+    }));
+  }, [liveTasks]);
 
   const [searchTerm, setSearchTerm] = React.useState('');
   const [priorityFilter, setPriorityFilter] = React.useState('all');
@@ -191,19 +121,39 @@ export function TaskReminders({ onPageChange }) {
     const total = tasks.length;
     const completed = tasks.filter((t) => t.completed).length;
     const pending = total - completed;
-    const overdue = tasks.filter((t) => !t.completed && new Date(t.dueDate) < new Date()).length;
+    const overdue = tasks.filter((t) => {
+      if (t.completed) return false;
+      const taskDateTime = new Date(t.dueDate);
+      const [hh, mm] = t.dueTime.split(':').map((x) => parseInt(x, 10));
+      taskDateTime.setHours(hh, mm);
+      return taskDateTime < new Date();
+    }).length;
     const urgent = tasks.filter((t) => !t.completed && t.priority === 'urgent').length;
     return { total, completed, pending, overdue, urgent };
   };
 
   const stats = getTaskStats();
 
-  const handleToggleTask = (taskId) => {
-    console.log('Toggling task:', taskId);
+  const handleToggleTask = async (taskId) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task) {
+      await toggleTask(taskId, !task.completed);
+    }
   };
 
-  const handleAddTask = () => {
-    console.log('Adding task:', newTask);
+  const handleAddTask = async () => {
+    const taskData = {
+      title: newTask.title,
+      description: newTask.description,
+      priority: newTask.priority,
+      category: newTask.category,
+      dueDate: newTask.dueDate.toISOString(),
+      dueTime: newTask.dueTime,
+      patientId: newTask.patientId || null,
+      patientName: newTask.patientName || null,
+      completed: false
+    };
+    await createTask(taskData);
     setIsAddingTask(false);
     setNewTask({
       title: '',
@@ -217,8 +167,10 @@ export function TaskReminders({ onPageChange }) {
     });
   };
 
-  const handleDeleteTask = (taskId) => {
-    console.log('Deleting task:', taskId);
+  const handleDeleteTask = async (taskId) => {
+    if (window.confirm('Are you sure you want to delete this task?')) {
+      await deleteTask(taskId);
+    }
   };
 
   const formatDate = (date) => {

@@ -3,6 +3,7 @@ import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { useAuth } from '../contexts/AuthContext';
+import { useProgress } from '../hooks/useDatabase';
 import {
   Calendar,
   User,
@@ -20,6 +21,7 @@ import {
 
 export function Navigation({ currentPage, onPageChange, userType, onUserTypeChange, onLogout }) {
   const { userProfile } = useAuth();
+  const { progress } = useProgress(userProfile?.uid);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   // Helper function to get user initials
@@ -55,7 +57,8 @@ export function Navigation({ currentPage, onPageChange, userType, onUserTypeChan
     { id: 'yoga-guidance', label: 'Yoga & Exercise', icon: Heart },
     { id: 'diet-lifestyle', label: 'Diet & Lifestyle', icon: Leaf },
     { id: 'documents', label: 'My Documents', icon: User },
-    { id: 'feedback', label: 'Session Feedback', icon: MessageSquare },
+    { id: 'communication', label: 'Communication', icon: MessageSquare },
+    { id: 'feedback', label: 'Session Feedback', icon: Heart },
     { id: 'transportation', label: 'Transportation', icon: Car },
     { id: 'notifications', label: 'Notifications', icon: Bell }
   ];
@@ -106,9 +109,9 @@ export function Navigation({ currentPage, onPageChange, userType, onUserTypeChan
               <p className="text-sm text-emerald-600 truncate">
                 {getUserSubtitle()}
               </p>
-              {userType === 'patient' && (
+              {userType === 'patient' && progress?.treatmentProgress && (
                 <Badge variant="outline" className="mt-1 text-xs border-emerald-300 text-emerald-700">
-                  Day 5 of 14
+                  Day {progress.treatmentProgress.currentDay} of {progress.treatmentProgress.totalDays}
                 </Badge>
               )}
             </div>

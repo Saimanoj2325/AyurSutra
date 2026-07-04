@@ -11,7 +11,6 @@ import {
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { userService, migrationService } from '../services/database';
-import { autoInitializeDatabase } from '../services/dataInitializer';
 
 const AuthContext = createContext();
 
@@ -39,9 +38,14 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const selectedLoginRoleRef = React.useRef(null);
 
   // Sign up function
   async function signup(email, password, userData) {
+    // Set role ref BEFORE creating the user, because onAuthStateChanged fires
+    // immediately after createUserWithEmailAndPassword and needs to know the role
+    selectedLoginRoleRef.current = userData.userType || 'patient';
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
     
@@ -72,13 +76,44 @@ export function AuthProvider({ children }) {
     if (!result.success) {
       throw new Error(`Failed to create user profile: ${result.error}`);
     }
+
+    // Manually set the profile now so we don't rely on the onAuthStateChanged race
+    setUserProfile(userDocData);
     
     return userCredential;
   }
 
-  // Login function
-  function login(email, password) {
-    return signInWithEmailAndPassword(auth, email, password);
+  // Login function with role validation
+  async function login(email, password, role = null) {
+    selectedLoginRoleRef.current = role;
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    
+    // Validate role if one was selected
+    if (role) {
+      try {
+        const userIndex = await getDoc(doc(db, 'users', credential.user.uid));
+        if (userIndex.exists()) {
+          const storedRole = userIndex.data().userType;
+          if (storedRole && storedRole !== role) {
+            // Role mismatch — sign out and throw error
+            await signOut(auth);
+            const correctRole = storedRole === 'patient' ? 'Patient' : 'Practitioner';
+            throw { 
+              code: 'auth/role-mismatch', 
+              message: `This account is registered as a ${correctRole}. Please select "${correctRole}" and try again.` 
+            };
+          }
+        }
+      } catch (error) {
+        if (error.code === 'auth/role-mismatch') {
+          throw error;
+        }
+        // If we can't check role (network issue etc.), allow login to proceed
+        console.warn('Could not verify role during login:', error);
+      }
+    }
+    
+    return credential;
   }
 
   // Logout function
@@ -116,10 +151,20 @@ export function AuthProvider({ children }) {
   }
 
   // Load user profile from Firestore
-  async function loadUserProfile(uid, user = null) {
+  async function loadUserProfile(uid, user = null, selectedRole = null) {
     try {
-      console.log('🔍 Loading user profile for UID:', uid);
+      console.log('🔍 Loading user profile for UID:', uid, 'Selected Role:', selectedRole);
       console.log('👤 Auth user details:', user);
+      
+      // If a role was selected at login, try direct lookup from that role collection first
+      if (selectedRole) {
+        const roleResult = await userService.getUserByRole(uid, selectedRole);
+        if (roleResult.success) {
+          console.log(`✅ Found user in selected role collection (${selectedRole})`);
+          setUserProfile(roleResult.data);
+          return;
+        }
+      }
       
       // Try to get user profile using the database service
       const result = await userService.getUser(uid);
@@ -156,15 +201,16 @@ export function AuthProvider({ children }) {
         console.log('✅ User profile loaded successfully:', result.data);
         setUserProfile(result.data);
       } else {
-        // User profile doesn't exist, create a default patient profile
-        console.warn('User profile not found, creating default profile');
+        // User profile doesn't exist, create a default profile with correct role
+        const chosenRole = selectedRole || 'patient';
+        console.warn(`User profile not found, creating default ${chosenRole} profile`);
         
         // Extract name from email if displayName is not available
         const authUser = user;
         const emailName = authUser?.email ? authUser.email.split('@')[0] : '';
         const displayName = authUser?.displayName;
         const derivedName = emailName ? emailName.charAt(0).toUpperCase() + emailName.slice(1) : '';
-        const userName = displayName || derivedName || 'New Patient';
+        const userName = displayName || derivedName || `New ${chosenRole === 'patient' ? 'Patient' : 'Practitioner'}`;
         
         console.log('🔧 Name extraction debug:', { 
           displayName, 
@@ -177,10 +223,16 @@ export function AuthProvider({ children }) {
           uid: uid,
           email: authUser?.email || '',
           name: userName,
-          userType: 'patient', // Note: This fallback should only happen for login without prior signup
-          dosha: null,
+          userType: chosenRole,
           createdAt: serverTimestamp()
         };
+
+        if (chosenRole === 'patient') {
+          defaultProfile.dosha = null;
+        } else {
+          defaultProfile.specialization = 'General';
+          defaultProfile.experience = '1';
+        }
         
         // Save using database service
         const createResult = await userService.createUser(defaultProfile);
@@ -198,11 +250,12 @@ export function AuthProvider({ children }) {
       console.error('Error loading user profile:', error);
       
       // Fallback: create a better temporary profile for this session
+      const chosenRole = selectedRole || 'patient';
       const authUser = user;
       const emailName = authUser?.email ? authUser.email.split('@')[0] : '';
       const displayName = authUser?.displayName;
       const derivedName = emailName ? emailName.charAt(0).toUpperCase() + emailName.slice(1) : '';
-      const userName = displayName || derivedName || 'New Patient';
+      const userName = displayName || derivedName || `New ${chosenRole === 'patient' ? 'Patient' : 'Practitioner'}`;
       
       console.log('🔧 Fallback name extraction debug:', { 
         displayName, 
@@ -215,21 +268,25 @@ export function AuthProvider({ children }) {
         uid: uid,
         email: authUser?.email || '',
         name: userName,
-        userType: 'patient',
-        dosha: null,
+        userType: chosenRole,
         createdAt: serverTimestamp(),
         isTemporary: true
       };
+
+      if (chosenRole === 'patient') {
+        fallbackProfile.dosha = null;
+      } else {
+        fallbackProfile.specialization = 'General';
+        fallbackProfile.experience = '1';
+      }
+
       setUserProfile(fallbackProfile);
       console.warn('Using fallback profile due to Firestore connection issues');
     }
   }
 
   useEffect(() => {
-    // Proactively initialize database with seed data if it's empty
-    if (auth) {
-      autoInitializeDatabase().catch(err => console.error("Error auto-initializing database:", err));
-    }
+    // Seeding is disabled by user request to keep the database completely fresh.
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       console.log('🔐 Auth state changed:', user ? `User logged in: ${user.email}` : 'User logged out');
@@ -240,7 +297,8 @@ export function AuthProvider({ children }) {
           email: user.email, 
           displayName: user.displayName 
         });
-        await loadUserProfile(user.uid, user);
+        await loadUserProfile(user.uid, user, selectedLoginRoleRef.current);
+        selectedLoginRoleRef.current = null;
       } else {
         setUserProfile(null);
       }

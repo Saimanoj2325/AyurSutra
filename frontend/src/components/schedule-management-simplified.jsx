@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Separator } from './ui/separator';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from './ui/alert-dialog';
 import { toast } from 'sonner';
+import { useAuth } from '../contexts/AuthContext';
+import { useSessions } from '../hooks/useDatabase';
 import {
   ArrowLeft,
   Calendar,
@@ -37,164 +39,6 @@ import {
  * @param {Function} props.onPageChange - Function to handle page navigation
  */
 
-// Upcoming appointments data
-const upcomingAppointments = [
-  {
-    id: 1,
-    date: new Date(2024, 11, 15),
-    time: '09:00',
-    endTime: '10:00',
-    duration: 60,
-    patient: {
-      name: 'Priya Sharma',
-      avatar: '/placeholder-avatar.jpg',
-      phone: '+91 98765 43210',
-      email: 'priya.sharma@email.com',
-      age: 34,
-      dosha: 'Vata-Pitta'
-    },
-    therapy: 'Abhyanga',
-    status: 'confirmed',
-    room: 'Room A',
-    notes: 'Regular stress relief session. Patient responds well to treatment.',
-    sessionNumber: 9,
-    totalSessions: 12,
-    priority: 'medium'
-  },
-  {
-    id: 2,
-    date: new Date(2024, 11, 15),
-    time: '10:30',
-    endTime: '11:15',
-    duration: 45,
-    patient: {
-      name: 'Raj Patel',
-      avatar: '/placeholder-avatar.jpg',
-      phone: '+91 87654 32109',
-      email: 'raj.patel@email.com',
-      age: 42,
-      dosha: 'Pitta-Kapha'
-    },
-    therapy: 'Shirodhara',
-    status: 'pending',
-    room: 'Room B',
-    notes: 'Monitor blood pressure before session. Patient reported dizziness last time.',
-    sessionNumber: 4,
-    totalSessions: 10,
-    priority: 'high'
-  },
-  {
-    id: 3,
-    date: new Date(2024, 11, 15),
-    time: '14:00',
-    endTime: '15:30',
-    duration: 90,
-    patient: {
-      name: 'Meera Singh',
-      avatar: '/placeholder-avatar.jpg',
-      phone: '+91 76543 21098',
-      email: 'meera.singh@email.com',
-      age: 28,
-      dosha: 'Vata'
-    },
-    therapy: 'Panchakarma',
-    status: 'confirmed',
-    room: 'Room C',
-    notes: 'Detox session day 3. Patient responding excellently to treatment.',
-    sessionNumber: 12,
-    totalSessions: 14,
-    priority: 'high'
-  },
-  {
-    id: 4,
-    date: new Date(2024, 11, 16),
-    time: '09:30',
-    endTime: '10:00',
-    duration: 30,
-    patient: {
-      name: 'Amit Kumar',
-      avatar: '/placeholder-avatar.jpg',
-      phone: '+91 65432 10987',
-      email: 'amit.kumar@email.com',
-      age: 36,
-      dosha: 'Kapha'
-    },
-    therapy: 'Yoga Therapy',
-    status: 'confirmed',
-    room: 'Studio 1',
-    notes: 'Focus on weight management and joint mobility exercises.',
-    sessionNumber: 3,
-    totalSessions: 8,
-    priority: 'medium'
-  },
-  {
-    id: 5,
-    date: new Date(2024, 11, 16),
-    time: '11:00',
-    endTime: '12:15',
-    duration: 75,
-    patient: {
-      name: 'Sunita Verma',
-      avatar: '/placeholder-avatar.jpg',
-      phone: '+91 54321 09876',
-      email: 'sunita.verma@email.com',
-      age: 42,
-      dosha: 'Kapha-Vata'
-    },
-    therapy: 'Abhyanga',
-    status: 'confirmed',
-    room: 'Room A',
-    notes: 'Maintenance session. Patient prefers moderate pressure with warm sesame oil.',
-    sessionNumber: 8,
-    totalSessions: 12,
-    priority: 'low'
-  },
-  {
-    id: 6,
-    date: new Date(2024, 11, 17),
-    time: '08:30',
-    endTime: '09:30',
-    duration: 60,
-    patient: {
-      name: 'Vikram Agarwal',
-      avatar: '/placeholder-avatar.jpg',
-      phone: '+91 43210 98765',
-      email: 'vikram.agarwal@email.com',
-      age: 35,
-      dosha: 'Pitta-Vata'
-    },
-    therapy: 'Nasya',
-    status: 'pending',
-    room: 'Room B',
-    notes: 'First session for sinus treatment. Explain procedure thoroughly.',
-    sessionNumber: 1,
-    totalSessions: 5,
-    priority: 'medium'
-  },
-  {
-    id: 7,
-    date: new Date(2024, 11, 18),
-    time: '10:00',
-    endTime: '11:30',
-    duration: 90,
-    patient: {
-      name: 'Ramesh Gupta',
-      avatar: '/placeholder-avatar.jpg',
-      phone: '+91 21098 76543',
-      email: 'ramesh.gupta@email.com',
-      age: 55,
-      dosha: 'Kapha'
-    },
-    therapy: 'Panchakarma',
-    status: 'confirmed',
-    room: 'Room A',
-    notes: 'Weight management program. Monitor vitals - patient has diabetes.',
-    sessionNumber: 5,
-    totalSessions: 14,
-    priority: 'high'
-  }
-];
-
 export function ScheduleManagement({ onPageChange }) {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [selectedAppointment, setSelectedAppointment] = React.useState(null);
@@ -214,6 +58,61 @@ export function ScheduleManagement({ onPageChange }) {
     time: '',
     reason: ''
   });
+
+  const { currentUser } = useAuth();
+  const { sessions: liveSessions = [], updateSession } = useSessions(currentUser?.uid, 'practitioner');
+
+  const upcomingAppointments = React.useMemo(() => {
+    return liveSessions.map(session => {
+      let dateObj = new Date();
+      if (session.date) {
+        dateObj = session.date.seconds ? new Date(session.date.seconds * 1000) : new Date(session.date);
+      }
+      
+      let durationMins = 60;
+      if (session.duration) {
+        const parsed = parseInt(session.duration);
+        if (!isNaN(parsed)) durationMins = parsed;
+      }
+      
+      let endTimeStr = 'TBD';
+      if (session.time && !isNaN(dateObj.getTime())) {
+        try {
+          const [hours, minutes] = session.time.split(':').map(Number);
+          const end = new Date(dateObj);
+          end.setHours(hours);
+          end.setMinutes(minutes + durationMins);
+          endTimeStr = end.toTimeString().split(' ')[0].substring(0, 5);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      return {
+        id: session.id,
+        date: dateObj,
+        time: session.time || '09:00',
+        endTime: endTimeStr,
+        duration: durationMins,
+        patient: {
+          id: session.patientId,
+          name: session.patientName || 'Unknown Patient',
+          avatar: '/placeholder-avatar.jpg',
+          phone: session.patientPhone || '+91 99999 99999',
+          email: session.patientEmail || '',
+          age: session.patientAge || 30,
+          dosha: session.patientDosha || 'Vata'
+        },
+        therapy: session.therapy || 'Abhyanga',
+        status: session.status || 'confirmed',
+        room: session.location || 'Room A',
+        notes: session.notes || '',
+        sessionNumber: session.sessionNumber || 1,
+        totalSessions: session.totalSessions || 10,
+        priority: session.priority || 'medium'
+      };
+    });
+  }, [liveSessions]);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -253,6 +152,7 @@ export function ScheduleManagement({ onPageChange }) {
   };
 
   const formatTime = (time) => {
+    if (!time || !time.includes(':')) return time;
     return new Date(`2024-01-01T${time}`).toLocaleTimeString('en-US', {
       hour: 'numeric',
       minute: '2-digit',
@@ -276,32 +176,54 @@ export function ScheduleManagement({ onPageChange }) {
     return groups;
   }, {});
 
-  const handleModifyAppointment = () => {
+  const handleModifyAppointment = async () => {
     if (selectedAppointment) {
-      console.log('Modifying appointment:', selectedAppointment.id, modifyData);
-      toast.success('Appointment modified successfully');
-      setIsModifyDialogOpen(false);
-      setModifyData({ notes: '', room: '', duration: '' });
-      setSelectedAppointment(null);
+      try {
+        await updateSession(selectedAppointment.id, {
+          notes: modifyData.notes,
+          location: modifyData.room,
+          duration: modifyData.duration
+        });
+        toast.success('Appointment modified successfully');
+        setIsModifyDialogOpen(false);
+        setModifyData({ notes: '', room: '', duration: '' });
+        setSelectedAppointment(null);
+      } catch (err) {
+        toast.error('Failed to modify: ' + err.message);
+      }
     }
   };
 
-  const handleRescheduleAppointment = () => {
+  const handleRescheduleAppointment = async () => {
     if (selectedAppointment && rescheduleData.date && rescheduleData.time) {
-      console.log('Rescheduling appointment:', selectedAppointment.id, rescheduleData);
-      toast.success('Appointment rescheduled successfully');
-      setIsRescheduleDialogOpen(false);
-      setRescheduleData({ date: '', time: '', reason: '' });
-      setSelectedAppointment(null);
+      try {
+        await updateSession(selectedAppointment.id, {
+          date: rescheduleData.date,
+          time: rescheduleData.time,
+          notes: selectedAppointment.notes 
+            ? `${selectedAppointment.notes}\n[Rescheduled: ${rescheduleData.reason}]` 
+            : `[Rescheduled: ${rescheduleData.reason}]`
+        });
+        toast.success('Appointment rescheduled successfully');
+        setIsRescheduleDialogOpen(false);
+        setRescheduleData({ date: '', time: '', reason: '' });
+        setSelectedAppointment(null);
+      } catch (err) {
+        toast.error('Failed to reschedule: ' + err.message);
+      }
     }
   };
 
-  const handleCancelAppointment = () => {
+  const handleCancelAppointment = async () => {
     if (selectedAppointment) {
-      console.log('Cancelling appointment:', selectedAppointment.id);
-      toast.success('Appointment cancelled successfully');
-      setIsCancelDialogOpen(false);
-      setSelectedAppointment(null);
+      try {
+        await updateSession(selectedAppointment.id, { status: 'cancelled' });
+        toast.success('Appointment cancelled successfully');
+        setIsCancelDialogOpen(false);
+        setSelectedAppointment(null);
+      } catch (err) {
+        toast.error('Failed to cancel: ' + err.message);
+      }
     }
   };
 
