@@ -1,8 +1,6 @@
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { ScrollArea } from './ui/scroll-area';
 import { useAuth } from '../contexts/AuthContext';
 import { useProgress } from '../hooks/useDatabase';
 import {
@@ -137,9 +135,14 @@ export function AyurvedaChatbot({ isVisible = true }) {
     setIsTyping(true);
 
     try {
+      let headers = { 'Content-Type': 'application/json' };
+      if (currentUser) {
+        const token = await currentUser.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       const response = await fetch(`${API_BASE_URL}/chatbot/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         body: JSON.stringify({
           message: text,
           conversation_history: messages.map(msg => ({
@@ -151,9 +154,7 @@ export function AyurvedaChatbot({ isVisible = true }) {
       });
 
       if (!response.ok) throw new Error('Failed to get AI response');
-
       const data = await response.json();
-      
       const botMessage = {
         id: (Date.now() + 1).toString(),
         text: data.response || data.plain_text,
@@ -214,13 +215,14 @@ export function AyurvedaChatbot({ isVisible = true }) {
     });
   };
 
-  if (!isVisible) return null;
+  // Only render for patient users
+  if (!isVisible || userProfile?.userType !== 'patient') return null;
 
   return (
     <>
       {/* Floating Chat Button */}
       {!isOpen && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999 }}>
           <Button
             onClick={() => setIsOpen(true)}
             className="w-16 h-16 rounded-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110"
@@ -235,183 +237,207 @@ export function AyurvedaChatbot({ isVisible = true }) {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className={`fixed bottom-6 right-6 z-50 transition-all duration-300 ${
-          isMinimized ? 'w-80 h-16' : 'w-[420px] h-[36rem]'
-        }`}>
-          <Card className="bg-white shadow-2xl border-emerald-200 h-full flex flex-col overflow-hidden">
-            {/* Chat Header */}
-            <CardHeader className="p-4 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-t-lg flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-                    <Leaf className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-white text-lg">AyurBot</CardTitle>
-                    <CardDescription className="text-emerald-100 text-sm">
-                      AI-Powered Ayurvedic Assistant
-                    </CardDescription>
-                  </div>
+        <div
+          style={{
+            position: 'fixed',
+            bottom: isMinimized ? '24px' : '16px',
+            right: isMinimized ? '24px' : '16px',
+            width: isMinimized ? '320px' : '420px',
+            height: isMinimized ? '64px' : '560px',
+            maxHeight: isMinimized ? '64px' : 'calc(100vh - 32px)',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            borderRadius: '12px',
+            overflow: 'hidden',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            border: '1px solid #a7f3d0',
+            backgroundColor: '#ffffff',
+            transition: 'all 0.3s ease',
+          }}
+        >
+          {/* Chat Header */}
+          <div
+            style={{
+              padding: '12px 16px',
+              background: 'linear-gradient(to right, #059669, #0d9488)',
+              color: 'white',
+              flexShrink: 0,
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+                  <Leaf className="w-6 h-6" />
                 </div>
-                <div className="flex items-center space-x-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearChat}
-                    className="text-white hover:bg-white/20 h-8 w-8 p-0"
-                    title="Clear chat"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsMinimized(!isMinimized)}
-                    className="text-white hover:bg-white/20 h-8 w-8 p-0"
-                  >
-                    {isMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsOpen(false)}
-                    className="text-white hover:bg-white/20 h-8 w-8 p-0"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
+                <div>
+                  <div className="font-semibold text-lg">AyurBot</div>
+                  <div className="text-emerald-100 text-sm">AI-Powered Ayurvedic Assistant</div>
                 </div>
               </div>
-            </CardHeader>
+              <div className="flex items-center space-x-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearChat}
+                  className="text-white hover:bg-white/20 h-8 w-8 p-0"
+                  title="Clear chat"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsMinimized(!isMinimized)}
+                  className="text-white hover:bg-white/20 h-8 w-8 p-0"
+                >
+                  {isMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsOpen(false)}
+                  className="text-white hover:bg-white/20 h-8 w-8 p-0"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
 
-            {!isMinimized && (
-              <>
-                {/* Quick Questions (only shown initially) */}
-                {messages.length <= 1 && (
-                  <div className="p-3 border-b border-gray-100 flex-shrink-0 bg-emerald-50/50">
-                    <p className="text-xs text-emerald-700 mb-2 font-medium">Quick questions:</p>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {quickQuestions.map((question, index) => {
-                        const Icon = question.icon;
-                        return (
-                          <Button
-                            key={index}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => sendMessage(question.text)}
-                            className="text-xs h-auto py-1.5 px-2 justify-start border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors"
-                          >
-                            <Icon className="w-3 h-3 mr-1 flex-shrink-0" />
-                            <span className="truncate">{question.text}</span>
-                          </Button>
-                        );
-                      })}
-                    </div>
+          {!isMinimized && (
+            <>
+              {/* Quick Questions (only shown initially) */}
+              {messages.length <= 1 && (
+                <div style={{ padding: '12px', borderBottom: '1px solid #f3f4f6', backgroundColor: '#ecfdf5', flexShrink: 0 }}>
+                  <p className="text-xs text-emerald-700 mb-2 font-medium">Quick questions:</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {quickQuestions.map((question, index) => {
+                      const Icon = question.icon;
+                      return (
+                        <Button
+                          key={index}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => sendMessage(question.text)}
+                          className="text-xs h-auto py-1.5 px-2 justify-start border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 transition-colors"
+                        >
+                          <Icon className="w-3 h-3 mr-1 flex-shrink-0" />
+                          <span className="truncate">{question.text}</span>
+                        </Button>
+                      );
+                    })}
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Messages */}
-                <CardContent className="flex-1 p-0 overflow-hidden">
-                  <ScrollArea className="h-full">
-                    <div className="p-4 space-y-4">
-                      {messages.map((message) => (
-                        <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                          <div className={`max-w-[88%] rounded-2xl p-3 ${
-                            message.sender === 'user'
-                              ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-md'
-                              : 'bg-gray-50 text-gray-900 border border-gray-100 rounded-bl-md'
-                          }`}>
-                            <div className="flex items-start space-x-2">
-                              {message.sender === 'bot' && (
-                                <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  <Bot className="w-3 h-3 text-white" />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <div 
-                                  className="text-sm leading-relaxed [&_strong]:font-semibold [&_li]:my-0.5 [&_h3]:text-emerald-800 [&_h4]:text-emerald-700"
-                                  dangerouslySetInnerHTML={{ __html: renderMarkdown(message.text) }}
-                                />
-                                
-                                {/* Source citations */}
-                                {message.sender === 'bot' && message.sources && message.sources.length > 0 && (
-                                  <div className="mt-2 pt-2 border-t border-gray-200">
-                                    <p className="text-xs text-gray-500 flex items-center gap-1">
-                                      📚 Sources: {message.sources.join(' • ')}
-                                    </p>
-                                  </div>
-                                )}
-                                
-                                <p className={`text-xs mt-1.5 ${
-                                  message.sender === 'user' ? 'text-emerald-200' : 'text-gray-400'
-                                }`}>
-                                  {formatTime(message.timestamp)}
+              {/* Messages */}
+              <div
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  padding: '16px',
+                  minHeight: 0,
+                }}
+              >
+                <div className="space-y-4">
+                  {messages.map((message) => (
+                    <div key={message.id} className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[88%] rounded-2xl p-3 ${
+                        message.sender === 'user'
+                          ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-br-md'
+                          : 'bg-gray-50 text-gray-900 border border-gray-100 rounded-bl-md'
+                      }`}>
+                        <div className="flex items-start space-x-2">
+                          {message.sender === 'bot' && (
+                            <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <Bot className="w-3 h-3 text-white" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div 
+                              className="text-sm leading-relaxed [&_strong]:font-semibold [&_li]:my-0.5 [&_h3]:text-emerald-800 [&_h4]:text-emerald-700"
+                              dangerouslySetInnerHTML={{ __html: renderMarkdown(message.text) }}
+                            />
+                            
+                            {/* Source citations */}
+                            {message.sender === 'bot' && message.sources && message.sources.length > 0 && (
+                              <div className="mt-2 pt-2 border-t border-gray-200">
+                                <p className="text-xs text-gray-500 flex items-center gap-1">
+                                  📚 Sources: {message.sources.join(' • ')}
                                 </p>
                               </div>
-                              {message.sender === 'user' && (
-                                <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  <User className="w-3 h-3 text-white" />
-                                </div>
-                              )}
-                            </div>
+                            )}
+                            
+                            <p className={`text-xs mt-1.5 ${
+                              message.sender === 'user' ? 'text-emerald-200' : 'text-gray-400'
+                            }`}>
+                              {formatTime(message.timestamp)}
+                            </p>
                           </div>
-                        </div>
-                      ))}
-
-                      {/* Typing Indicator */}
-                      {isTyping && (
-                        <div className="flex justify-start">
-                          <div className="bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-md p-3 max-w-[80%]">
-                            <div className="flex items-center space-x-2">
-                              <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center">
-                                <Bot className="w-3 h-3 text-white" />
-                              </div>
-                              <div className="flex space-x-1">
-                                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce"></div>
-                                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
-                                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
-                              </div>
-                              <span className="text-xs text-gray-400 ml-1">AyurBot is thinking...</span>
+                          {message.sender === 'user' && (
+                            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <User className="w-3 h-3 text-white" />
                             </div>
-                          </div>
+                          )}
                         </div>
-                      )}
-                      <div ref={messagesEndRef} />
+                      </div>
                     </div>
-                  </ScrollArea>
-                </CardContent>
+                  ))}
 
-                {/* Input */}
-                <div className="p-3 border-t border-gray-100 flex-shrink-0 bg-white">
-                  <div className="flex space-x-2">
-                    <Input
-                      placeholder="Ask about diet, lifestyle, or treatments..."
-                      value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          sendMessage(inputMessage);
-                        }
-                      }}
-                      className="flex-1 border-emerald-200 focus:border-emerald-400 focus:ring-emerald-400/20 text-sm"
-                      disabled={isTyping}
-                    />
-                    <Button
-                      onClick={() => sendMessage(inputMessage)}
-                      disabled={!inputMessage.trim() || isTyping}
-                      className="bg-emerald-600 hover:bg-emerald-700 transition-colors"
-                      size="sm"
-                    >
-                      <Send className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1.5 text-center">
-                    🌿 Powered by Ayurvedic RAG AI • Consult your practitioner for personalized advice
-                  </p>
+                  {/* Typing Indicator */}
+                  {isTyping && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-50 border border-gray-100 rounded-2xl rounded-bl-md p-3 max-w-[80%]">
+                        <div className="flex items-center space-x-2">
+                          <div className="w-6 h-6 rounded-full bg-emerald-600 flex items-center justify-center">
+                            <Bot className="w-3 h-3 text-white" />
+                          </div>
+                          <div className="flex space-x-1">
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce"></div>
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
+                          </div>
+                          <span className="text-xs text-gray-400 ml-1">AyurBot is thinking...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
                 </div>
-              </>
-            )}
-          </Card>
+              </div>
+
+              {/* Input */}
+              <div style={{ padding: '12px', borderTop: '1px solid #f3f4f6', backgroundColor: '#ffffff', flexShrink: 0 }}>
+                <div className="flex space-x-2">
+                  <Input
+                    placeholder="Ask about diet, lifestyle, or treatments..."
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage(inputMessage);
+                      }
+                    }}
+                    className="flex-1 border-emerald-200 focus:border-emerald-400 focus:ring-emerald-400/20 text-sm"
+                    disabled={isTyping}
+                  />
+                  <Button
+                    onClick={() => sendMessage(inputMessage)}
+                    disabled={!inputMessage.trim() || isTyping}
+                    className="bg-emerald-600 hover:bg-emerald-700 transition-colors"
+                    size="sm"
+                  >
+                    <Send className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5 text-center">
+                  🌿 Powered by Ayurvedic RAG AI • Consult your practitioner for personalized advice
+                </p>
+              </div>
+            </>
+          )}
         </div>
       )}
     </>

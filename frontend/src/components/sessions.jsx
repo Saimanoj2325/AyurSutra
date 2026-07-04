@@ -51,6 +51,20 @@ export function Sessions({ onPageChange }) {
   const handleSaveSession = async (formData) => {
     if (!currentUser) return;
     
+    // Check for double-booking conflict
+    const targetDate = new Date(formData.date);
+    const hasConflict = (sessions || []).some(s => {
+      if (s.id === sessionToEdit?.id || s.status === 'cancelled') return false;
+      const sDate = s.date?.seconds ? new Date(s.date.seconds * 1000) : new Date(s.date);
+      return sDate.toDateString() === targetDate.toDateString() && s.time === formData.time;
+    });
+
+    if (hasConflict) {
+      if (!window.confirm('WARNING: You already have another session scheduled at this date and time. Do you want to proceed and request a double-booking?')) {
+        return;
+      }
+    }
+    
     const sessionData = {
       therapy: formData.therapy,
       date: formData.date, // Store as ISO string
@@ -63,7 +77,7 @@ export function Sessions({ onPageChange }) {
       patientName: userProfile?.name || currentUser.displayName || 'Patient',
       duration: formData.duration || '60 minutes',
       location: formData.location || 'Treatment Room A',
-      status: formData.status || 'confirmed',
+      status: formData.status || 'pending', // Default to pending for practitioner approval
       sessionId: `SES${Date.now()}`,
       preparation: ['Light meal 2 hours before', 'Wear comfortable clothes', 'Arrive 15 minutes early']
     };
@@ -81,6 +95,7 @@ export function Sessions({ onPageChange }) {
           practitionerId: sessionData.practitionerId,
           duration: sessionData.duration,
           location: sessionData.location,
+          status: 'pending', // Mark as pending when rescheduled
         });
       } else {
         // Create new session
@@ -174,6 +189,18 @@ export function Sessions({ onPageChange }) {
 
           {showActions && session.status !== 'completed' && session.status !== 'cancelled' && (
             <div className="flex space-x-3 pt-2">
+              <Button 
+                size="sm" 
+                onClick={() => {
+                  localStorage.setItem('auto_start_call', 'true');
+                  localStorage.setItem('active_call_partner_id', session.practitionerId || 'practitioner_001');
+                  localStorage.setItem('active_call_partner_name', session.practitionerName || session.practitioner || 'Dr. Kamal Raj');
+                  onPageChange('communication');
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium shadow-sm hover:shadow-md transition-all"
+              >
+                Join Call
+              </Button>
               <Button size="sm" onClick={() => handleOpenEditModal(session)} variant="outline" className="border-emerald-200 text-emerald-700 hover:bg-emerald-50">
                 <Edit className="w-4 h-4 mr-2" />Modify
               </Button>

@@ -9,7 +9,8 @@ import datetime
 from collections import Counter
 from typing import List, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from firebase_config import verify_firebase_token
 from pydantic import BaseModel
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -415,7 +416,7 @@ Provide a helpful, structured response. If the context doesn't fully cover the q
 
 # --- API Routes ---
 @router.post("/chat", response_model=ChatResponse)
-async def chat_with_ayurbot(request: ChatRequest):
+async def chat_with_ayurbot(request: ChatRequest, token: dict = Depends(verify_firebase_token)):
     if not client:
         raise HTTPException(status_code=503, detail="AI service unavailable. API key not configured.")
     
@@ -454,7 +455,7 @@ async def chatbot_health():
 
 
 @router.get("/knowledge")
-async def list_knowledge_topics():
+async def list_knowledge_topics(token: dict = Depends(verify_firebase_token)):
     """List available knowledge base topics and categories"""
     categories = {}
     for entry in AYURVEDIC_KNOWLEDGE:

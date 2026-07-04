@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
+import { useAuth } from '../contexts/AuthContext';
+import { useProgress } from '../hooks/useDatabase';
 import {
   TrendingUp,
   Calendar,
@@ -21,62 +23,63 @@ import {
  * @param {{ onPageChange: (page: string) => void }} props
  */
 export function ProgressVisualization({ onPageChange }) {
-  const treatmentProgress = {
-    currentDay: 5,
+  const { currentUser } = useAuth();
+  const { progress: liveProgress, loading } = useProgress(currentUser?.uid);
+
+  const treatmentProgress = liveProgress?.treatmentProgress || {
+    currentDay: 0,
     totalDays: 14,
-    percentage: 35,
-    phase: 'Purvakarma (Preparation Phase)',
-    nextPhase: 'Pradhanakarma (Main Treatment)',
-    daysToNext: 2
+    percentage: 0,
+    phase: 'Not started',
+    nextPhase: 'Begin treatment',
+    daysToNext: 0
   };
 
+  const rawMetrics = liveProgress?.healthMetrics || {};
   const healthMetrics = [
     {
       name: 'Energy Level',
-      current: 85,
-      previous: 72,
-      target: 90,
-      trend: 'up',
+      current: rawMetrics.energyLevel?.current || 0,
+      previous: rawMetrics.energyLevel?.previous || 0,
+      target: rawMetrics.energyLevel?.target || 90,
+      trend: rawMetrics.energyLevel?.trend || 'up',
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       icon: Heart
     },
     {
       name: 'Stress Level',
-      current: 35,
-      previous: 48,
-      target: 25,
-      trend: 'down',
+      current: rawMetrics.stressLevel?.current || 0,
+      previous: rawMetrics.stressLevel?.previous || 0,
+      target: rawMetrics.stressLevel?.target || 25,
+      trend: rawMetrics.stressLevel?.trend || 'down',
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       icon: Activity
     },
     {
       name: 'Sleep Quality',
-      current: 88,
-      previous: 75,
-      target: 90,
-      trend: 'up',
+      current: rawMetrics.sleepQuality?.current || 0,
+      previous: rawMetrics.sleepQuality?.previous || 0,
+      target: rawMetrics.sleepQuality?.target || 90,
+      trend: rawMetrics.sleepQuality?.trend || 'up',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       icon: Droplets
     },
     {
       name: 'Digestive Health',
-      current: 78,
-      previous: 65,
-      target: 85,
-      trend: 'up',
+      current: rawMetrics.digestiveHealth?.current || 0,
+      previous: rawMetrics.digestiveHealth?.previous || 0,
+      target: rawMetrics.digestiveHealth?.target || 85,
+      trend: rawMetrics.digestiveHealth?.trend || 'up',
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
       icon: Target
     }
   ];
 
-  const weeklyData = [
-    { week: 'Week 1', energy: 65, stress: 55, sleep: 70, digestion: 60 },
-    { week: 'Week 2', energy: 85, stress: 35, sleep: 88, digestion: 78 }
-  ];
+  const weeklyData = liveProgress?.weeklyData || [];
 
   const milestones = [
     {
@@ -278,28 +281,32 @@ export function ProgressVisualization({ onPageChange }) {
                 <div className="mt-8">
                   <h3 className="font-medium text-gray-900 mb-4">Weekly Comparison</h3>
                   <div className="space-y-4">
-                    {Object.keys(weeklyData[0])
-                      .filter((key) => key !== 'week')
-                      .map((metric) => (
-                        <div key={metric} className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span className="capitalize">{metric}</span>
-                            <span className="text-gray-600">
-                              Week 1: {weeklyData[0][metric]}% → Week 2: {weeklyData[1][metric]}%
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <Progress value={weeklyData[0][metric]} className="h-2" />
-                              <span className="text-xs text-gray-500">Week 1</span>
+                    {weeklyData && weeklyData.length >= 2 ? (
+                      Object.keys(weeklyData[0])
+                        .filter((key) => key !== 'week')
+                        .map((metric) => (
+                          <div key={metric} className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="capitalize">{metric}</span>
+                              <span className="text-gray-600">
+                                Week 1: {weeklyData[0][metric]}% → Week 2: {weeklyData[1][metric]}%
+                              </span>
                             </div>
-                            <div>
-                              <Progress value={weeklyData[1][metric]} className="h-2" />
-                              <span className="text-xs text-gray-500">Week 2</span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Progress value={weeklyData[0][metric]} className="h-2" />
+                                <span className="text-xs text-gray-500">Week 1</span>
+                              </div>
+                              <div>
+                                <Progress value={weeklyData[1][metric]} className="h-2" />
+                                <span className="text-xs text-gray-500">Week 2</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No weekly comparison data available yet.</p>
+                    )}
                   </div>
                 </div>
               </div>

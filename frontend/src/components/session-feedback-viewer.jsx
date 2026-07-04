@@ -24,132 +24,42 @@ import {
   Meh
 } from 'lucide-react';
 
+import { useAllFeedback } from '../hooks/useDatabase';
+
 /**
  * @param {{ onPageChange: (page: string) => void }} props
  */
 export function SessionFeedbackViewer({ onPageChange }) {
-  const feedbackData = [
-    {
-      id: 1,
-      sessionId: 's101',
-      patientId: 1,
-      patientName: 'Priya Sharma',
-      patientAvatar: '/placeholder-avatar.jpg',
-      sessionDate: new Date(2024, 11, 13),
-      sessionTime: '14:30',
-      sessionType: 'Abhyanga',
-      practitioner: 'Dr. Kamal Raj',
-      rating: 5,
-      comfort: 5,
-      effectiveness: 5,
-      environment: 4,
-      communication: 5,
-      overallExperience: 'Excellent',
-      feedback:
-        'The session was absolutely wonderful! I felt so relaxed and my stress levels dropped significantly. Dr. Kamal was very professional and made me feel comfortable throughout. The oils used were perfect for my skin type.',
-      improvements: 'Maybe slightly warmer room temperature would be perfect.',
-      wouldRecommend: true,
-      submittedAt: new Date(2024, 11, 13, 16, 45),
-      mood: 'excellent',
-      symptoms: ['stress-reduced', 'sleep-improved', 'energy-increased']
-    },
-    {
-      id: 2,
-      sessionId: 's102',
-      patientId: 2,
-      patientName: 'Raj Patel',
-      patientAvatar: '/placeholder-avatar.jpg',
-      sessionDate: new Date(2024, 11, 8),
-      sessionTime: '16:15',
-      sessionType: 'Shirodhara',
-      practitioner: 'Dr. Kamal Raj',
-      rating: 4,
-      comfort: 3,
-      effectiveness: 4,
-      environment: 4,
-      communication: 4,
-      overallExperience: 'Good',
-      feedback:
-        'The Shirodhara session was beneficial for my insomnia. I did feel a bit uncomfortable initially with the oil temperature, but Dr. Kamal adjusted it perfectly. My sleep has improved since the session.',
-      improvements: 'Initial oil temperature could be better calibrated.',
-      wouldRecommend: true,
-      submittedAt: new Date(2024, 11, 8, 18, 30),
-      mood: 'good',
-      symptoms: ['sleep-improved', 'anxiety-reduced']
-    },
-    {
-      id: 3,
-      sessionId: 's103',
-      patientId: 3,
-      patientName: 'Meera Singh',
-      patientAvatar: '/placeholder-avatar.jpg',
-      sessionDate: new Date(2024, 11, 12),
-      sessionTime: '11:45',
-      sessionType: 'Panchakarma',
-      practitioner: 'Dr. Kamal Raj',
-      rating: 5,
-      comfort: 5,
-      effectiveness: 5,
-      environment: 5,
-      communication: 5,
-      overallExperience: 'Excellent',
-      feedback:
-        'This Panchakarma session was transformative! I feel like a completely new person. My energy levels are through the roof, and my digestive issues have completely resolved. Dr. Kamal is truly gifted.',
-      improvements: 'Everything was perfect! No suggestions.',
-      wouldRecommend: true,
-      submittedAt: new Date(2024, 11, 12, 14, 20),
-      mood: 'excellent',
-      symptoms: ['energy-increased', 'digestion-improved', 'mental-clarity']
-    },
-    {
-      id: 4,
-      sessionId: 's104',
-      patientId: 4,
-      patientName: 'Amit Kumar',
-      patientAvatar: '/placeholder-avatar.jpg',
-      sessionDate: new Date(2024, 10, 28),
-      sessionTime: '10:00',
-      sessionType: 'Yoga Therapy',
-      practitioner: 'Dr. Kamal Raj',
-      rating: 3,
-      comfort: 4,
-      effectiveness: 3,
-      environment: 4,
-      communication: 3,
-      overallExperience: 'Average',
-      feedback:
-        'The yoga session was okay. Some poses were challenging for my current fitness level. I think I need more personalized modifications for my joint issues.',
-      improvements: 'More beginner-friendly modifications needed for joint problems.',
-      wouldRecommend: false,
-      submittedAt: new Date(2024, 10, 28, 12, 15),
-      mood: 'neutral',
-      symptoms: ['flexibility-improved']
-    },
-    {
-      id: 5,
-      sessionId: 's105',
-      patientId: 1,
-      patientName: 'Priya Sharma',
-      patientAvatar: '/placeholder-avatar.jpg',
-      sessionDate: new Date(2024, 11, 10),
-      sessionTime: '14:30',
-      sessionType: 'Abhyanga',
-      practitioner: 'Dr. Kamal Raj',
-      rating: 4,
-      comfort: 4,
-      effectiveness: 4,
-      environment: 4,
-      communication: 5,
-      overallExperience: 'Good',
-      feedback:
-        'Another great session! Consistency in treatment is really showing results. My skin texture continues to improve and stress levels remain low.',
-      improvements: 'Perhaps include some breathing exercises during the massage.',
-      wouldRecommend: true,
-      submittedAt: new Date(2024, 11, 10, 16, 0),
-      mood: 'good',
-      symptoms: ['stress-reduced', 'skin-improved']
+  const { feedback: liveFeedback = [], loading: feedbackLoading } = useAllFeedback();
+
+  const feedbackData = React.useMemo(() => {
+    if (liveFeedback && liveFeedback.length > 0) {
+      return liveFeedback.map(f => ({
+        id: f.id,
+        sessionId: f.sessionId || '',
+        patientId: f.patientId || '',
+        patientName: f.patientName || 'Patient',
+        patientAvatar: f.patientAvatar || '/placeholder-avatar.jpg',
+        sessionDate: f.sessionDate?.seconds ? new Date(f.sessionDate.seconds * 1000) : new Date(f.sessionDate || Date.now()),
+        sessionTime: f.sessionTime || '',
+        sessionType: f.sessionType || '',
+        practitioner: f.practitioner || 'Dr. Kamal Raj',
+        rating: f.rating || 5,
+        comfort: f.comfort || 5,
+        effectiveness: f.effectiveness || 5,
+        environment: f.environment || 5,
+        communication: f.communication || 5,
+        overallExperience: f.overallExperience || 'Good',
+        feedback: f.feedback || '',
+        improvements: f.improvements || '',
+        wouldRecommend: f.wouldRecommend !== undefined ? f.wouldRecommend : true,
+        submittedAt: f.submittedAt?.seconds ? new Date(f.submittedAt.seconds * 1000) : new Date(f.submittedAt || Date.now()),
+        mood: f.mood || 'good',
+        symptoms: Array.isArray(f.symptoms) ? f.symptoms : (typeof f.symptoms === 'string' ? f.symptoms.split(',').map(s => s.trim()).filter(Boolean) : [])
+      }));
     }
-  ];
+    return [];
+  }, [liveFeedback]);
 
   const [searchTerm, setSearchTerm] = React.useState('');
   const [patientFilter, setPatientFilter] = React.useState('all');
@@ -157,8 +67,8 @@ export function SessionFeedbackViewer({ onPageChange }) {
   const [ratingFilter, setRatingFilter] = React.useState('all');
   const [selectedTab, setSelectedTab] = React.useState('all');
 
-  const patients = [...new Set(feedbackData.map((f) => f.patientName))];
-  const sessionTypes = [...new Set(feedbackData.map((f) => f.sessionType))];
+  const patients = [...new Set(feedbackData.map((f) => f.patientName).filter(Boolean))];
+  const sessionTypes = [...new Set(feedbackData.map((f) => f.sessionType).filter(Boolean))];
 
   const filteredFeedback = feedbackData.filter((feedback) => {
     const matchesSearch =
@@ -202,6 +112,9 @@ export function SessionFeedbackViewer({ onPageChange }) {
 
   const getOverallStats = () => {
     const total = feedbackData.length;
+    if (total === 0) {
+      return { total: 0, avgRating: '0.0', recommendationRate: '0.0' };
+    }
     const avgRating = (feedbackData.reduce((sum, f) => sum + f.rating, 0) / total).toFixed(1);
     const recommended = feedbackData.filter((f) => f.wouldRecommend).length;
     const recommendationRate = ((recommended / total) * 100).toFixed(1);
@@ -456,7 +369,7 @@ export function SessionFeedbackViewer({ onPageChange }) {
                       <div>
                         <h4 className="font-medium text-gray-900 mb-3">Symptoms & Improvements</h4>
                         <div className="flex flex-wrap gap-2 mb-3">
-                          {feedback.symptoms.map((symptom, index) => (
+                          {Array.isArray(feedback.symptoms) && feedback.symptoms.map((symptom, index) => (
                             <Badge key={index} className="bg-green-100 text-green-800" variant="outline">
                               {symptom.replace('-', ' ')}
                             </Badge>

@@ -50,8 +50,8 @@ function AppContent() {
 
   const handlePageChange = (page) => {
     // Ensure users can only access pages appropriate to their role
-    const patientPages = ['patient-dashboard', 'sessions', 'progress', 'yoga-guidance', 'diet-lifestyle', 'documents', 'notifications', 'feedback', 'transportation', 'settings'];
-    const practitionerPages = ['practitioner-dashboard', 'schedule', 'patients', 'analytics', 'notes', 'feedback-viewer', 'communication', 'tasks', 'resources', 'settings'];
+    const patientPages = ['patient-dashboard', 'sessions', 'progress', 'yoga-guidance', 'diet-lifestyle', 'documents', 'notifications', 'feedback', 'transportation', 'communication', 'settings'];
+    const practitionerPages = ['practitioner-dashboard', 'schedule', 'patients', 'analytics', 'notes', 'feedback-viewer', 'communication', 'tasks', 'resources', 'ai-recommendations', 'settings'];
     
     const userType = userProfile?.userType;
     
@@ -76,7 +76,7 @@ function AppContent() {
   const handleLogoutConfirm = async () => {
     try {
       await logout();
-      setCurrentPage('patient-dashboard');
+      setCurrentPage(null);
       setIsLogoutDialogOpen(false);
     } catch (error) {
       console.error('Logout error:', error);
@@ -157,6 +157,8 @@ function AppContent() {
           return <PatientFeedbackEnhanced onPageChange={handlePageChange} />;
         case 'transportation':
           return <TransportationAssistance onPageChange={handlePageChange} />;
+        case 'communication':
+          return <CommunicationMessaging onPageChange={handlePageChange} />;
         case 'settings':
           return <Settings onPageChange={handlePageChange} onLogout={handleLogoutRequest} userType={userProfile?.userType} />;
         default:
@@ -177,10 +179,12 @@ function AppContent() {
         
         <main className="flex-1 lg:ml-0">
           {renderCurrentPage()}
-          {/* Add chatbot only for patient pages */}
-          {userProfile?.userType === 'patient' && <AyurvedaChatbot />}
         </main>
       </div>
+
+      {/* Chatbot rendered outside the flex container so fixed positioning works */}
+      {userProfile?.userType === 'patient' && <AyurvedaChatbot />}
+
 
       {/* Logout Confirmation Dialog */}
       <Dialog open={isLogoutDialogOpen} onOpenChange={setIsLogoutDialogOpen}>

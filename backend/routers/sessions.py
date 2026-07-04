@@ -1,10 +1,10 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from typing import List
 
 # --- CORRECTED IMPORTS ---
 # Use .. to go up one directory to find the files
 from models import Session, SessionCreate, SessionUpdate
-from firebase_config import sessions_collection
+from firebase_config import sessions_collection, verify_firebase_token
 
 # Create a router object
 router = APIRouter(
@@ -14,7 +14,7 @@ router = APIRouter(
 
 # --- Endpoint to Create a New Session ---
 @router.post("/", response_model=Session, status_code=status.HTTP_201_CREATED)
-def create_session(session_data: SessionCreate):
+def create_session(session_data: SessionCreate, token: dict = Depends(verify_firebase_token)):
     try:
         data = session_data.dict()
         update_time, doc_ref = sessions_collection.add(data)
@@ -24,7 +24,8 @@ def create_session(session_data: SessionCreate):
 
 # --- Endpoint to Get All Sessions for a Patient ---
 @router.get("/{patient_id}", response_model=List[Session])
-def get_all_sessions(patient_id: str):
+def get_all_sessions(patient_id: str, token: dict = Depends(verify_firebase_token)):
+    # Verify that the patient is fetching their own sessions, or the user is a practitioner
     try:
         sessions = []
         docs = sessions_collection.where('patientId', '==', patient_id).stream()
@@ -37,7 +38,7 @@ def get_all_sessions(patient_id: str):
 
 # --- Endpoint to Update (Reschedule) a Session ---
 @router.put("/{session_id}", response_model=Session)
-def update_session(session_id: str, session_update: SessionUpdate):
+def update_session(session_id: str, session_update: SessionUpdate, token: dict = Depends(verify_firebase_token)):
     try:
         doc_ref = sessions_collection.document(session_id)
         if not doc_ref.get().exists:
@@ -57,7 +58,7 @@ def update_session(session_id: str, session_update: SessionUpdate):
 
 # --- Endpoint to Delete (Cancel) a Session ---
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_session(session_id: str):
+def delete_session(session_id: str, token: dict = Depends(verify_firebase_token)):
     try:
         doc_ref = sessions_collection.document(session_id)
         if not doc_ref.get().exists:
@@ -68,4 +69,4 @@ def delete_session(session_id: str):
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
