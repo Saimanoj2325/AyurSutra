@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from firebase_config import db, verify_firebase_token
-from models import Practitioner
+from ..firebase_config import db, verify_firebase_token
+from ..models import Practitioner
 
 router = APIRouter(
     prefix="/practitioners",
@@ -19,11 +19,11 @@ def get_all_practitioners(token: dict = Depends(verify_firebase_token)):
         docs = db.collection('practitioners').stream()
         
         for doc in docs:
-            practitioner_data = doc.to_dict()
+            practitioner_data = doc.to_dict() or {}
             practitioners.append(Practitioner(
                 id=doc.id, 
-                name=practitioner_data.get('name'), 
-                userType=practitioner_data.get('userType', 'practitioner')
+                name=practitioner_data.get('name', 'Unknown') or 'Unknown', 
+                userType=practitioner_data.get('userType', 'practitioner') or 'practitioner'
             ))
         
         return practitioners

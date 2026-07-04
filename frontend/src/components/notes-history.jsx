@@ -167,7 +167,6 @@ export function NotesHistory({ onPageChange }) {
       toast.error('Failed to save note: ' + dbErr.message);
     }
   };
-  };
 
   const handleEditNote = (noteId) => {
     setEditingNote(noteId);
